@@ -268,7 +268,22 @@
 <div id="tvRoot" class="tv-root" style="display:none;"></div>
 <div id="modalRoot"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
+const SUPABASE_URL = 'https://igvhdnhodxpeiybzxhjb.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlndmhkbmhvZHhwZWl5Ynp4aGpiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYzNTA3MTEsImV4cCI6MjEwMTkyNjcxMX0.rbXYl8gWJnmVC4G6s8V5V6H7eywV-ZnoC4LxbMEViEM';
+const sbClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+async function dbGet(key){
+  const { data, error } = await sbClient.from('torneo_storage').select('value').eq('key', key).maybeSingle();
+  if(error) throw new Error(error.message || JSON.stringify(error));
+  return data ? data.value : null;
+}
+async function dbSet(key, value){
+  const { error } = await sbClient.from('torneo_storage').upsert({ key, value, updated_at: new Date().toISOString() });
+  if(error) throw new Error(error.message || JSON.stringify(error));
+}
+
 const ICONS = {
   domino: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
     <rect x="4" y="2.5" width="16" height="19" rx="2.4"/>
@@ -344,8 +359,8 @@ let dataLoadError = null;
 
 async function loadData(){
   try{
-    const res = await window.storage.get(STORAGE_KEY, true);
-    state = res && res.value ? JSON.parse(res.value) : defaultState();
+    const val = await dbGet(STORAGE_KEY);
+    state = val ? JSON.parse(val) : defaultState();
     dataLoadError = null;
   }catch(e){
     console.error('Error cargando', e);
@@ -371,7 +386,7 @@ function renderErrorBanner(){
 let saving = false;
 async function saveData(){
   try{
-    await window.storage.set(STORAGE_KEY, JSON.stringify(state), true);
+    await dbSet(STORAGE_KEY, JSON.stringify(state));
     dataLoadError = null;
   }catch(e){
     console.error('Error guardando', e);
@@ -381,13 +396,9 @@ async function saveData(){
 
 async function loadPinState(){
   try{
-    const res = await window.storage.get(PIN_KEY, true);
-    pinConfigured = res && res.value ? res.value : null;
+    pinConfigured = await dbGet(PIN_KEY);
   }catch(e){ pinConfigured = null; }
-  try{
-    const res2 = await window.storage.get(PIN_UNLOCKED_KEY, false);
-    unlocked = !!(res2 && res2.value === 'true');
-  }catch(e){ unlocked = false; }
+  unlocked = localStorage.getItem(PIN_UNLOCKED_KEY) === 'true';
 }
 
 function updateLockBadge(){
@@ -423,21 +434,59 @@ function showPinModal(onSuccess){
     if(!val) return;
     if(configuring){
       pinConfigured = val;
-      await window.storage.set(PIN_KEY, val, true);
+      await dbSet(PIN_KEY, val);
       unlocked = true;
-      await window.storage.set(PIN_UNLOCKED_KEY, 'true', false);
+      localStorage.setItem(PIN_UNLOCKED_KEY, 'true');
       root.innerHTML = '';
       updateLockBadge();
+      render();
       if(onSuccess) onSuccess();
     } else if(val === pinConfigured){
       unlocked = true;
-      await window.storage.set(PIN_UNLOCKED_KEY, 'true', false);
+      localStorage.setItem(PIN_UNLOCKED_KEY, 'true');
       root.innerHTML = '';
       updateLockBadge();
+      render();
       if(onSuccess) onSuccess();
     } else {
       document.getElementById('pinError').style.display = 'block';
     }
+  };
+}
+
+function showEditPairModal(game, pairId){
+  const p = state.games[game].pairs.find(p => p.id === pairId);
+  if(!p) return;
+  const root = document.getElementById('modalRoot');
+  root.innerHTML = `<div class="modal-overlay" id="editOverlay">
+    <div class="modal-card">
+      <h3>Editar pareja</h3>
+      <p class="modal-desc">Corrige el nombre de alguno de los dos jugadores.</p>
+      <div style="text-align:left;margin-bottom:8px;">
+        <label style="font-size:11.5px;font-weight:600;color:#54607a;">Jugador 1</label>
+        <input id="editJ1" value="${esc(p.j1nombre||'')}" style="margin-top:4px;">
+      </div>
+      <div style="text-align:left;margin-bottom:8px;">
+        <label style="font-size:11.5px;font-weight:600;color:#54607a;">Jugador 2</label>
+        <input id="editJ2" value="${esc(p.j2nombre||'')}" style="margin-top:4px;">
+      </div>
+      <div class="modal-actions">
+        <button class="btn secondary" id="editCancel" type="button">Cancelar</button>
+        <button class="btn" id="editSave" type="button">Guardar</button>
+      </div>
+    </div>
+  </div>`;
+  document.getElementById('editJ1').focus();
+  document.getElementById('editCancel').onclick = () => { root.innerHTML = ''; };
+  document.getElementById('editSave').onclick = () => {
+    const j1 = document.getElementById('editJ1').value.trim();
+    const j2 = document.getElementById('editJ2').value.trim();
+    if(!j1 || !j2) return;
+    p.j1nombre = j1;
+    p.j2nombre = j2;
+    root.innerHTML = '';
+    saveData();
+    render();
   };
 }
 
@@ -544,7 +593,7 @@ function renderGamePage(game){
   const showGrupos = formato !== 'eliminatoria';
   const showElim = formato !== 'grupos';
   let sub = gameSubTab[game];
-  if((sub === 'grupos' && !showGrupos) || (sub === 'eliminatoria' && !showElim)){
+  if((sub === 'grupos' && !showGrupos) || (sub === 'eliminatoria' && !showElim) || (sub === 'ajustes' && !unlocked)){
     sub = 'apuntarse';
     gameSubTab[game] = sub;
   }
@@ -557,7 +606,7 @@ function renderGamePage(game){
     <button class="subtab ${sub==='apuntarse'?'active':''}" data-subtab="apuntarse" data-game="${game}">Apuntarse</button>
     ${showGrupos ? `<button class="subtab ${sub==='grupos'?'active':''}" data-subtab="grupos" data-game="${game}">Grupos</button>` : ''}
     ${showElim ? `<button class="subtab ${sub==='eliminatoria'?'active':''}" data-subtab="eliminatoria" data-game="${game}">Eliminatoria</button>` : ''}
-    <button class="subtab ${sub==='ajustes'?'active':''}" data-subtab="ajustes" data-game="${game}">Ajustes</button>
+    ${unlocked ? `<button class="subtab ${sub==='ajustes'?'active':''}" data-subtab="ajustes" data-game="${game}">Ajustes</button>` : ''}
   </div>`;
   if(sub === 'apuntarse') html += renderApuntarse(game);
   else if(sub === 'grupos') html += renderGroups(game);
@@ -573,12 +622,10 @@ function renderApuntarse(game){
     <p style="font-size:12.5px;color:#54607a;margin:-6px 0 12px;">Se juega en parejas. Escribe el nombre y apellidos de los dos jugadores.</p>
     <form data-action="register-pair" data-game="${game}">
       <div class="row">
-        <div class="field"><label>Jugador 1 — Nombre</label><input name="j1nombre" required></div>
-        <div class="field"><label>Jugador 1 — Apellidos</label><input name="j1apellidos" required></div>
+        <div class="field"><label>Jugador 1 — Nombre y apellidos</label><input name="j1nombre" placeholder="Ej. Ana García" required></div>
       </div>
       <div class="row" style="margin-top:8px;">
-        <div class="field"><label>Jugador 2 — Nombre</label><input name="j2nombre" required></div>
-        <div class="field"><label>Jugador 2 — Apellidos</label><input name="j2apellidos" required></div>
+        <div class="field"><label>Jugador 2 — Nombre y apellidos</label><input name="j2nombre" placeholder="Ej. Bea Martí" required></div>
       </div>
       <button class="btn" type="submit" style="margin-top:10px;">Apuntar pareja</button>
     </form>
@@ -595,6 +642,7 @@ function renderApuntarse(game){
       if(pairs.length === 0) return;
       html += `<h3 style="margin-top:14px;">Grupo ${gr}</h3><div class="chips">` + pairs.map(p => `
         <span class="chip">${esc(pairDisplayName(p))}
+          <button class="iconbtn" data-action="edit-pair" data-game="${game}" data-id="${p.id}" title="Editar">✏️</button>
           <button class="iconbtn" data-action="delete-pair" data-game="${game}" data-id="${p.id}" title="Eliminar">✕</button>
         </span>`).join('') + `</div>`;
     });
@@ -606,6 +654,7 @@ function renderApuntarse(game){
           <span class="names">${esc(pairDisplayName(p))}</span>
           <select name="grupo" style="width:auto;flex:0 0 auto;">${groupOptions}</select>
           <button class="btn small" type="submit">Asignar</button>
+          <button class="iconbtn" type="button" data-action="edit-pair" data-game="${game}" data-id="${p.id}" title="Editar">✏️</button>
           <button class="iconbtn" type="button" data-action="delete-pair" data-game="${game}" data-id="${p.id}" title="Eliminar">✕</button>
         </form>`).join('') + `</div>
         <p style="font-size:11.5px;color:#7c8598;margin-top:8px;">La organización asigna el grupo de cada pareja (requiere PIN).</p>`;
@@ -822,6 +871,14 @@ document.addEventListener('click', e => {
     return;
   }
 
+  const editPair = e.target.closest('[data-action="edit-pair"]');
+  if(editPair){
+    const { game, id } = editPair.dataset;
+    const run = () => showEditPairModal(game, id);
+    unlocked ? run() : showPinModal(run);
+    return;
+  }
+
   const delPair = e.target.closest('[data-action="delete-pair"]');
   if(delPair){
     const run = () => {
@@ -870,11 +927,9 @@ document.addEventListener('submit', e => {
   // Public: signing up a pair never requires the PIN.
   if(action === 'register-pair'){
     const j1nombre = (fd.get('j1nombre')||'').trim();
-    const j1apellidos = (fd.get('j1apellidos')||'').trim();
     const j2nombre = (fd.get('j2nombre')||'').trim();
-    const j2apellidos = (fd.get('j2apellidos')||'').trim();
-    if(!j1nombre || !j1apellidos || !j2nombre || !j2apellidos) return;
-    state.games[game].pairs.push({ id: uid(), j1nombre, j1apellidos, j2nombre, j2apellidos, grupo: null });
+    if(!j1nombre || !j2nombre) return;
+    state.games[game].pairs.push({ id: uid(), j1nombre, j2nombre, grupo: null });
     form.reset();
     saveData();
     render();
@@ -934,8 +989,9 @@ document.getElementById('lockBadge').addEventListener('click', () => {
   if(unlocked){
     if(confirm('¿Bloquear la edición en este dispositivo? Habrá que volver a introducir el PIN.')){
       unlocked = false;
-      window.storage.set(PIN_UNLOCKED_KEY, 'false', false);
+      window.localStorage.setItem(PIN_UNLOCKED_KEY, 'false');
       updateLockBadge();
+      render();
     }
   } else {
     showPinModal(() => {});
