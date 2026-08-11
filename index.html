@@ -268,22 +268,7 @@
 <div id="tvRoot" class="tv-root" style="display:none;"></div>
 <div id="modalRoot"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-const SUPABASE_URL = 'https://igvhdnhodxpeiybzxhjb.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlndmhkbmhvZHhwZWl5Ynp4aGpiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYzNTA3MTEsImV4cCI6MjEwMTkyNjcxMX0.rbXYl8gWJnmVC4G6s8V5V6H7eywV-ZnoC4LxbMEViEM';
-const sbClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
-async function dbGet(key){
-  const { data, error } = await sbClient.from('torneo_storage').select('value').eq('key', key).maybeSingle();
-  if(error) throw new Error(error.message || JSON.stringify(error));
-  return data ? data.value : null;
-}
-async function dbSet(key, value){
-  const { error } = await sbClient.from('torneo_storage').upsert({ key, value, updated_at: new Date().toISOString() });
-  if(error) throw new Error(error.message || JSON.stringify(error));
-}
-
 const ICONS = {
   domino: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
     <rect x="4" y="2.5" width="16" height="19" rx="2.4"/>
@@ -347,7 +332,7 @@ function pairDisplayName(p){
 
 function defaultGameState(){
   return { pairs: [], groups: ['A','B'], groupMatches: [], koMatches: [],
-    settings: { fecha:'', hora:'', lugar:'', notas:'' } };
+    settings: { fecha:'', hora:'', lugar:'', notas:'', formato:'grupos_eliminatoria' } };
 }
 function defaultState(){
   const games = {};
@@ -359,8 +344,8 @@ let dataLoadError = null;
 
 async function loadData(){
   try{
-    const val = await dbGet(STORAGE_KEY);
-    state = val ? JSON.parse(val) : defaultState();
+    const res = await window.storage.get(STORAGE_KEY, true);
+    state = res && res.value ? JSON.parse(res.value) : defaultState();
     dataLoadError = null;
   }catch(e){
     console.error('Error cargando', e);
@@ -370,7 +355,9 @@ async function loadData(){
   // backfill in case new games were added later
   Object.keys(GAMES).forEach(k => {
     if(!state.games[k]) state.games[k] = defaultGameState();
-    if(!state.games[k].settings) state.games[k].settings = { fecha:'', hora:'', lugar:'', notas:'' };
+    if(!state.games[k].settings) state.games[k].settings = { fecha:'', hora:'', lugar:'', notas:'', formato:'grupos_eliminatoria' };
+    if(!state.games[k].settings.formato) state.games[k].settings.formato = 'grupos_eliminatoria';
+    state.games[k].groupMatches.forEach(m => { if(m.played === undefined) m.played = true; });
   });
 }
 
@@ -384,7 +371,7 @@ function renderErrorBanner(){
 let saving = false;
 async function saveData(){
   try{
-    await dbSet(STORAGE_KEY, JSON.stringify(state));
+    await window.storage.set(STORAGE_KEY, JSON.stringify(state), true);
     dataLoadError = null;
   }catch(e){
     console.error('Error guardando', e);
@@ -394,9 +381,13 @@ async function saveData(){
 
 async function loadPinState(){
   try{
-    pinConfigured = await dbGet(PIN_KEY);
+    const res = await window.storage.get(PIN_KEY, true);
+    pinConfigured = res && res.value ? res.value : null;
   }catch(e){ pinConfigured = null; }
-  unlocked = localStorage.getItem(PIN_UNLOCKED_KEY) === 'true';
+  try{
+    const res2 = await window.storage.get(PIN_UNLOCKED_KEY, false);
+    unlocked = !!(res2 && res2.value === 'true');
+  }catch(e){ unlocked = false; }
 }
 
 function updateLockBadge(){
@@ -432,15 +423,15 @@ function showPinModal(onSuccess){
     if(!val) return;
     if(configuring){
       pinConfigured = val;
-      await dbSet(PIN_KEY, val);
+      await window.storage.set(PIN_KEY, val, true);
       unlocked = true;
-      localStorage.setItem(PIN_UNLOCKED_KEY, 'true');
+      await window.storage.set(PIN_UNLOCKED_KEY, 'true', false);
       root.innerHTML = '';
       updateLockBadge();
       if(onSuccess) onSuccess();
     } else if(val === pinConfigured){
       unlocked = true;
-      localStorage.setItem(PIN_UNLOCKED_KEY, 'true');
+      await window.storage.set(PIN_UNLOCKED_KEY, 'true', false);
       root.innerHTML = '';
       updateLockBadge();
       if(onSuccess) onSuccess();
@@ -460,7 +451,7 @@ function computeStandings(game, grupo){
   const pairs = g.pairs.filter(p => p.grupo === grupo);
   const stats = {};
   pairs.forEach(p => stats[p.id] = { id:p.id, nombre:pairDisplayName(p), pj:0, g:0, pf:0, pc:0 });
-  g.groupMatches.filter(m => m.grupo === grupo).forEach(m => {
+  g.groupMatches.filter(m => m.grupo === grupo && m.played).forEach(m => {
     if(!stats[m.pair1] || !stats[m.pair2]) return;
     stats[m.pair1].pj++; stats[m.pair2].pj++;
     stats[m.pair1].pf += m.score1; stats[m.pair1].pc += m.score2;
@@ -548,8 +539,15 @@ function renderResumen(){
 
 function renderGamePage(game){
   const meta = GAMES[game];
-  const sub = gameSubTab[game];
   const s = state.games[game].settings;
+  const formato = s.formato || 'grupos_eliminatoria';
+  const showGrupos = formato !== 'eliminatoria';
+  const showElim = formato !== 'grupos';
+  let sub = gameSubTab[game];
+  if((sub === 'grupos' && !showGrupos) || (sub === 'eliminatoria' && !showElim)){
+    sub = 'apuntarse';
+    gameSubTab[game] = sub;
+  }
   let html = '';
   if(s.fecha || s.hora || s.lugar){
     const parts = [s.fecha, s.hora, s.lugar].filter(Boolean).map(esc);
@@ -557,8 +555,8 @@ function renderGamePage(game){
   }
   html += `<div class="subtabbar">
     <button class="subtab ${sub==='apuntarse'?'active':''}" data-subtab="apuntarse" data-game="${game}">Apuntarse</button>
-    <button class="subtab ${sub==='grupos'?'active':''}" data-subtab="grupos" data-game="${game}">Grupos</button>
-    <button class="subtab ${sub==='eliminatoria'?'active':''}" data-subtab="eliminatoria" data-game="${game}">Eliminatoria</button>
+    ${showGrupos ? `<button class="subtab ${sub==='grupos'?'active':''}" data-subtab="grupos" data-game="${game}">Grupos</button>` : ''}
+    ${showElim ? `<button class="subtab ${sub==='eliminatoria'?'active':''}" data-subtab="eliminatoria" data-game="${game}">Eliminatoria</button>` : ''}
     <button class="subtab ${sub==='ajustes'?'active':''}" data-subtab="ajustes" data-game="${game}">Ajustes</button>
   </div>`;
   if(sub === 'apuntarse') html += renderApuntarse(game);
@@ -628,6 +626,8 @@ function renderGroups(game){
     const pairsInGroup = g.pairs.filter(p => p.grupo === gr);
     const standings = computeStandings(game, gr);
     const matches = g.groupMatches.filter(m => m.grupo === gr);
+    const pending = matches.filter(m => !m.played);
+    const played = matches.filter(m => m.played);
     html += `<div class="card"><h2>Grupo ${gr}</h2>`;
     if(pairsInGroup.length < 2){
       html += `<div class="empty">Se necesitan al menos 2 parejas en este grupo.</div></div>`;
@@ -641,17 +641,25 @@ function renderGroups(game){
     });
     html += `</tbody></table>`;
 
-    const pairOptions = pairsInGroup.map(p => `<option value="${p.id}">${esc(pairDisplayName(p))}</option>`).join('');
-    html += `<form class="row" data-action="add-groupmatch" data-game="${game}" data-grupo="${gr}">
-      <div class="field"><label>Pareja 1</label><select name="pair1" required>${pairOptions}</select></div>
-      <div class="field" style="flex:0 0 70px;"><label>Pts</label><input type="number" name="score1" required></div>
-      <div class="field"><label>Pareja 2</label><select name="pair2" required>${pairOptions}</select></div>
-      <div class="field" style="flex:0 0 70px;"><label>Pts</label><input type="number" name="score2" required></div>
-      <button class="btn" type="submit">Guardar</button>
-    </form>`;
+    const totalPosible = pairsInGroup.length * (pairsInGroup.length - 1) / 2;
+    if(matches.length < totalPosible){
+      html += `<button class="btn secondary small" data-action="generate-calendar" data-game="${game}" data-grupo="${gr}">📅 Generar calendario (todos contra todos)</button>`;
+    }
 
-    if(matches.length){
-      html += `<div class="matchlist">` + matches.map(m => `
+    if(pending.length){
+      html += `<h3 style="margin-top:14px;">Partidos por jugar</h3><div class="matchlist">` + pending.map(m => `
+        <form class="matchrow" data-action="enter-result" data-game="${game}" data-id="${m.id}" style="flex-wrap:wrap;">
+          <span class="names">${esc(pairName(game,m.pair1))} vs ${esc(pairName(game,m.pair2))}</span>
+          <input type="number" name="score1" placeholder="Pts" style="width:60px;flex:0 0 auto;" required>
+          <span>–</span>
+          <input type="number" name="score2" placeholder="Pts" style="width:60px;flex:0 0 auto;" required>
+          <button class="btn small" type="submit">Guardar</button>
+          <button class="iconbtn" type="button" data-action="delete-groupmatch" data-game="${game}" data-id="${m.id}">✕</button>
+        </form>`).join('') + `</div>`;
+    }
+
+    if(played.length){
+      html += `<h3 style="margin-top:14px;">Jugados</h3><div class="matchlist">` + played.map(m => `
         <div class="matchrow">
           <span class="names">${m.score1>m.score2?'<span class=\"win\">':''}${esc(pairName(game,m.pair1))}${m.score1>m.score2?'</span>':''}
             vs
@@ -660,6 +668,16 @@ function renderGroups(game){
           <button class="iconbtn" data-action="delete-groupmatch" data-game="${game}" data-id="${m.id}">✕</button>
         </div>`).join('') + `</div>`;
     }
+
+    const pairOptions = pairsInGroup.map(p => `<option value="${p.id}">${esc(pairDisplayName(p))}</option>`).join('');
+    html += `<h3 style="margin-top:14px;">Añadir partido suelto</h3>
+    <form class="row" data-action="add-groupmatch" data-game="${game}" data-grupo="${gr}">
+      <div class="field"><label>Pareja 1</label><select name="pair1" required>${pairOptions}</select></div>
+      <div class="field" style="flex:0 0 70px;"><label>Pts</label><input type="number" name="score1" required></div>
+      <div class="field"><label>Pareja 2</label><select name="pair2" required>${pairOptions}</select></div>
+      <div class="field" style="flex:0 0 70px;"><label>Pts</label><input type="number" name="score2" required></div>
+      <button class="btn" type="submit">Guardar</button>
+    </form>`;
     html += `</div>`;
   });
   return html;
@@ -719,22 +737,31 @@ function renderKnockout(game){
 
 function renderAjustes(game){
   const s = state.games[game].settings;
+  const formato = s.formato || 'grupos_eliminatoria';
+  const FORMATO_LABELS = { grupos: 'Solo grupos (liguilla)', eliminatoria: 'Solo eliminatoria directa', grupos_eliminatoria: 'Grupos + eliminatoria' };
   const hasAny = s.fecha || s.hora || s.lugar || s.notas;
   let html = `<div class="card">
     <h2>Ajustes de ${GAMES[game].name}</h2>
     <p style="font-size:12.5px;color:#54607a;margin:-6px 0 12px;">Fecha, hora, lugar y formato del torneo. Solo la organización puede cambiarlos (PIN).</p>`;
-  if(hasAny){
-    html += `<table class="standings" style="margin-bottom:14px;"><tbody>
+  html += `<table class="standings" style="margin-bottom:14px;"><tbody>
+      <tr><td>Formato</td><td style="text-align:right;">${esc(FORMATO_LABELS[formato])}</td></tr>
       ${s.fecha ? `<tr><td>Fecha</td><td style="text-align:right;">${esc(s.fecha)}</td></tr>` : ''}
       ${s.hora ? `<tr><td>Hora</td><td style="text-align:right;">${esc(s.hora)}</td></tr>` : ''}
       ${s.lugar ? `<tr><td>Lugar</td><td style="text-align:right;">${esc(s.lugar)}</td></tr>` : ''}
-      ${s.notas ? `<tr><td>Formato / notas</td><td style="text-align:right;">${esc(s.notas)}</td></tr>` : ''}
+      ${s.notas ? `<tr><td>Notas</td><td style="text-align:right;">${esc(s.notas)}</td></tr>` : ''}
     </tbody></table>`;
-  } else {
-    html += `<div class="empty">Todavía no hay fecha ni formato definidos para este torneo.</div>`;
-  }
   html += `<form data-action="save-settings" data-game="${game}">
       <div class="row">
+        <div class="field" style="flex:1 1 100%;">
+          <label>Formato del torneo</label>
+          <select name="formato">
+            <option value="grupos_eliminatoria" ${formato==='grupos_eliminatoria'?'selected':''}>Grupos + eliminatoria</option>
+            <option value="grupos" ${formato==='grupos'?'selected':''}>Solo grupos (liguilla)</option>
+            <option value="eliminatoria" ${formato==='eliminatoria'?'selected':''}>Solo eliminatoria directa</option>
+          </select>
+        </div>
+      </div>
+      <div class="row" style="margin-top:8px;">
         <div class="field"><label>Fecha</label><input type="date" name="fecha" value="${esc(s.fecha)}"></div>
         <div class="field"><label>Hora</label><input type="time" name="hora" value="${esc(s.hora)}"></div>
       </div>
@@ -742,7 +769,7 @@ function renderAjustes(game){
         <div class="field"><label>Lugar</label><input name="lugar" value="${esc(s.lugar)}" placeholder="Ej. Casal Faller"></div>
       </div>
       <div class="row" style="margin-top:8px;">
-        <div class="field"><label>Formato / notas</label><input name="notas" value="${esc(s.notas)}" placeholder="Ej. Grupos de 4, dos mejores de tres"></div>
+        <div class="field"><label>Notas</label><input name="notas" value="${esc(s.notas)}" placeholder="Ej. Dos mejores de tres"></div>
       </div>
       <button class="btn" type="submit" style="margin-top:10px;">Guardar ajustes</button>
     </form>
@@ -768,6 +795,27 @@ document.addEventListener('click', e => {
       const groups = state.games[game].groups;
       const nextCode = String.fromCharCode(65 + groups.length);
       groups.push(nextCode);
+      saveData(); render();
+    };
+    unlocked ? run() : showPinModal(run);
+    return;
+  }
+
+  const genCalBtn = e.target.closest('[data-action="generate-calendar"]');
+  if(genCalBtn){
+    const run = () => {
+      const game = genCalBtn.dataset.game;
+      const grupo = genCalBtn.dataset.grupo;
+      const g = state.games[game];
+      const pairsInGroup = g.pairs.filter(p => p.grupo === grupo);
+      const existing = new Set(g.groupMatches.filter(m => m.grupo === grupo).map(m => [m.pair1, m.pair2].sort().join('|')));
+      for(let i = 0; i < pairsInGroup.length; i++){
+        for(let j = i+1; j < pairsInGroup.length; j++){
+          const key = [pairsInGroup[i].id, pairsInGroup[j].id].sort().join('|');
+          if(existing.has(key)) continue;
+          g.groupMatches.push({ id: uid(), grupo, pair1: pairsInGroup[i].id, pair2: pairsInGroup[j].id, score1: null, score2: null, played: false });
+        }
+      }
       saveData(); render();
     };
     unlocked ? run() : showPinModal(run);
@@ -847,7 +895,8 @@ document.addEventListener('submit', e => {
         fecha: (fd.get('fecha')||'').trim(),
         hora: (fd.get('hora')||'').trim(),
         lugar: (fd.get('lugar')||'').trim(),
-        notas: (fd.get('notas')||'').trim()
+        notas: (fd.get('notas')||'').trim(),
+        formato: (fd.get('formato')||'grupos_eliminatoria').trim()
       };
     }
 
@@ -856,7 +905,14 @@ document.addEventListener('submit', e => {
       const pair1 = fd.get('pair1'), pair2 = fd.get('pair2');
       const score1 = Number(fd.get('score1')), score2 = Number(fd.get('score2'));
       if(pair1 === pair2){ alert('Elige dos parejas distintas.'); return; }
-      state.games[game].groupMatches.push({ id: uid(), grupo, pair1, pair2, score1, score2 });
+      state.games[game].groupMatches.push({ id: uid(), grupo, pair1, pair2, score1, score2, played: true });
+    }
+
+    if(action === 'enter-result'){
+      const id = form.dataset.id;
+      const score1 = Number(fd.get('score1')), score2 = Number(fd.get('score2'));
+      const m = state.games[game].groupMatches.find(m => m.id === id);
+      if(m){ m.score1 = score1; m.score2 = score2; m.played = true; }
     }
 
     if(action === 'add-komatch'){
@@ -878,7 +934,7 @@ document.getElementById('lockBadge').addEventListener('click', () => {
   if(unlocked){
     if(confirm('¿Bloquear la edición en este dispositivo? Habrá que volver a introducir el PIN.')){
       unlocked = false;
-      window.localStorage.setItem(PIN_UNLOCKED_KEY, 'false');
+      window.storage.set(PIN_UNLOCKED_KEY, 'false', false);
       updateLockBadge();
     }
   } else {
@@ -945,9 +1001,12 @@ function renderTV(){
     html += `<div class="tv-champion"><div class="label">Campeones</div><div class="name">🏆 ${esc(champ)}</div></div>`;
   }
 
+  const formato = (g.settings && g.settings.formato) || 'grupos_eliminatoria';
+
   if(g.pairs.length === 0){
     html += `<div class="tv-empty">Todavía no hay parejas inscritas en este torneo.</div>`;
   } else {
+    if(formato !== 'eliminatoria'){
     html += `<div class="tv-section-title">Fase de grupos</div><div class="tv-groups">`;
     g.groups.forEach(gr => {
       const pairsInGroup = g.pairs.filter(p => p.grupo === gr);
@@ -961,6 +1020,7 @@ function renderTV(){
       html += `</tbody></table></div>`;
     });
     html += `</div>`;
+    }
 
     const byRound = {};
     g.koMatches.forEach(m => { (byRound[m.ronda] = byRound[m.ronda] || []).push(m); });
