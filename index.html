@@ -201,62 +201,6 @@
   .pin-error{ color:var(--red); font-size:12px; font-weight:600; margin-bottom:8px; }
   .modal-actions{ display:flex; gap:8px; margin-top:6px; }
   .modal-actions .btn{ flex:1; }
-
-  .home-link.tv-link{ margin-top:8px; color:#54607a; text-decoration:none; font-size:12.5px; }
-
-  /* ---- TV MODE ---- */
-  .tv-root{
-    position:fixed; inset:0; background:var(--ink); color:var(--paper);
-    padding:3vh 4vw; display:flex; flex-direction:column; overflow-y:auto;
-  }
-  .tv-exit{
-    position:fixed; top:18px; right:22px; background:rgba(255,255,255,.12); color:var(--paper);
-    border:2px solid rgba(255,255,255,.4); border-radius:999px; padding:8px 16px; font-size:14px;
-    font-weight:700; cursor:pointer; z-index:5;
-  }
-  .tv-header{ display:flex; align-items:center; justify-content:center; gap:22px; margin-bottom:2vh; }
-  .tv-arrow{
-    background:rgba(255,255,255,.12); border:2px solid rgba(255,255,255,.4); color:var(--paper);
-    border-radius:50%; width:56px; height:56px; font-size:26px; cursor:pointer; flex:0 0 auto;
-  }
-  .tv-title{ display:flex; align-items:center; gap:16px; }
-  .tv-logo{ width:56px; height:auto; filter:drop-shadow(0 2px 6px rgba(0,0,0,.4)); flex:0 0 auto; }
-  .tv-title .bigdot{ width:64px;height:64px; border-radius:50%; display:flex; align-items:center; justify-content:center;
-    font-family:'Anton',sans-serif; font-size:28px; color:var(--paper); flex:0 0 auto;
-    box-shadow:0 0 0 3px rgba(255,255,255,.85), 0 0 0 5px rgba(255,255,255,.2); }
-  .tv-title h1{ font-family:'Anton',sans-serif; text-transform:uppercase; font-size:clamp(34px,6vw,64px); margin:0; }
-
-  .tv-champion{
-    background:linear-gradient(135deg,var(--gold),var(--orange)); color:var(--ink);
-    border-radius:18px; padding:2.2vh 2vw; text-align:center; margin-bottom:2.5vh;
-  }
-  .tv-champion .label{ font-size:clamp(14px,1.6vw,20px); text-transform:uppercase; letter-spacing:.12em; font-weight:700; }
-  .tv-champion .name{ font-family:'Anton',sans-serif; font-size:clamp(30px,5vw,54px); margin-top:4px; }
-
-  .tv-section-title{ font-family:'Anton',sans-serif; text-transform:uppercase; letter-spacing:.03em;
-    font-size:clamp(20px,2.6vw,30px); color:var(--gold); margin:1.6vh 0 1vh; }
-
-  .tv-groups{ display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:2vw; margin-bottom:1vh; }
-  .tv-group-card{ background:rgba(255,255,255,.06); border-radius:14px; padding:1.6vh 1.4vw; }
-  .tv-group-card h3{ font-family:'Anton',sans-serif; text-transform:uppercase; font-size:clamp(18px,2.2vw,24px);
-    margin:0 0 10px; color:var(--paper); }
-  table.tv-standings{ width:100%; border-collapse:collapse; font-size:clamp(15px,1.7vw,20px); }
-  table.tv-standings th{ text-transform:uppercase; font-size:clamp(10px,1vw,13px); color:rgba(255,255,255,.55);
-    text-align:center; padding:6px 4px; }
-  table.tv-standings th:first-child{ text-align:left; }
-  table.tv-standings td{ padding:8px 4px; text-align:center; border-top:1px solid rgba(255,255,255,.12); }
-  table.tv-standings td:first-child{ text-align:left; font-weight:600; }
-  table.tv-standings tr:first-child td{ color:var(--gold); font-weight:700; }
-
-  .tv-ko{ display:flex; flex-wrap:wrap; gap:2vw; }
-  .tv-ko-round{ flex:1 1 220px; }
-  .tv-ko-round h4{ font-family:'Anton',sans-serif; text-transform:uppercase; font-size:clamp(14px,1.6vw,18px);
-    color:rgba(255,255,255,.6); margin:0 0 8px; }
-  .tv-matchrow{ background:rgba(255,255,255,.06); border-radius:10px; padding:10px 14px; margin-bottom:8px;
-    display:flex; justify-content:space-between; align-items:center; font-size:clamp(14px,1.6vw,19px); gap:10px; }
-  .tv-matchrow .win{ color:var(--gold); font-weight:700; }
-  .tv-matchrow .score{ font-family:'IBM Plex Mono',monospace; font-weight:700; }
-  .tv-empty{ font-size:clamp(14px,1.6vw,19px); color:rgba(255,255,255,.55); }
 </style>
 </head>
 <body>
@@ -273,7 +217,6 @@
 
 <main id="app"><div class="empty" style="text-align:center;padding:40px 0;color:rgba(250,243,220,.7);">Cargando torneo…</div></main>
 </div>
-<div id="tvRoot" class="tv-root" style="display:none;"></div>
 <div id="modalRoot"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -561,8 +504,7 @@ function renderHome(){
       <span class="gstatus">${status}</span>
     </button>`;
   });
-  html += `</div><button class="home-link" data-tab="resumen">Ver resumen general</button>
-    <button class="home-link tv-link" id="tvModeBtn">📺 Modo TV</button>`;
+  html += `</div><button class="home-link" data-tab="resumen">Ver resumen general</button>`;
   return html;
 }
 
@@ -612,11 +554,13 @@ function renderGamePage(game){
   }
   html += `<div class="subtabbar">
     <button class="subtab ${sub==='apuntarse'?'active':''}" data-subtab="apuntarse" data-game="${game}">Apuntarse</button>
+    <button class="subtab ${sub==='parejas'?'active':''}" data-subtab="parejas" data-game="${game}">Parejas apuntadas</button>
     ${showGrupos ? `<button class="subtab ${sub==='grupos'?'active':''}" data-subtab="grupos" data-game="${game}">Grupos</button>` : ''}
     ${showElim ? `<button class="subtab ${sub==='eliminatoria'?'active':''}" data-subtab="eliminatoria" data-game="${game}">Eliminatoria</button>` : ''}
     ${unlocked ? `<button class="subtab ${sub==='ajustes'?'active':''}" data-subtab="ajustes" data-game="${game}">Ajustes</button>` : ''}
   </div>`;
   if(sub === 'apuntarse') html += renderApuntarse(game);
+  else if(sub === 'parejas') html += renderParejasApuntadas(game);
   else if(sub === 'grupos') html += renderGroups(game);
   else if(sub === 'eliminatoria') html += renderKnockout(game);
   else html += renderAjustes(game);
@@ -624,7 +568,6 @@ function renderGamePage(game){
 }
 
 function renderApuntarse(game){
-  const g = state.games[game];
   let html = `<div class="card">
     <h2>Apúntate a ${GAMES[game].name}</h2>
     <p style="font-size:12.5px;color:#54607a;margin:-6px 0 12px;">Se juega en parejas. Escribe el nombre y apellidos de los dos jugadores.</p>
@@ -638,10 +581,14 @@ function renderApuntarse(game){
       <button class="btn" type="submit" style="margin-top:10px;">Apuntar pareja</button>
     </form>
   </div>`;
+  return html;
+}
 
+function renderParejasApuntadas(game){
+  const g = state.games[game];
   const sinGrupo = g.pairs.filter(p => !p.grupo);
   const totalInscritas = g.pairs.length;
-  html += `<div class="card"><h3>Parejas apuntadas — ${totalInscritas}</h3>`;
+  let html = `<div class="card"><h3>Parejas apuntadas — ${totalInscritas}</h3>`;
   if(totalInscritas === 0){
     html += `<div class="empty">Todavía no se ha apuntado nadie.</div></div>`;
   } else {
@@ -705,20 +652,29 @@ function renderGroups(game){
 
     if(pending.length){
       html += `<h3 style="margin-top:14px;">Partidos por jugar</h3><div class="matchlist">` + pending.map(m => `
-        <form class="matchrow" data-action="enter-result" data-game="${game}" data-id="${m.id}" style="flex-wrap:wrap;">
-          <span class="names">${esc(pairName(game,m.pair1))} vs ${esc(pairName(game,m.pair2))}</span>
-          <input type="number" name="score1" placeholder="Pts" style="width:60px;flex:0 0 auto;" required>
-          <span>–</span>
-          <input type="number" name="score2" placeholder="Pts" style="width:60px;flex:0 0 auto;" required>
-          <button class="btn small" type="submit">Guardar</button>
-          <button class="iconbtn" type="button" data-action="delete-groupmatch" data-game="${game}" data-id="${m.id}">✕</button>
-        </form>`).join('') + `</div>`;
+        <div class="matchrow" style="flex-direction:column;align-items:stretch;gap:8px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span class="names">${esc(pairName(game,m.pair1))} vs ${esc(pairName(game,m.pair2))}</span>
+            <button class="iconbtn" type="button" data-action="delete-groupmatch" data-game="${game}" data-id="${m.id}">✕</button>
+          </div>
+          <form data-action="set-match-date" data-game="${game}" data-id="${m.id}" style="display:flex;gap:6px;align-items:center;">
+            <span style="font-size:12px;color:#54607a;">📅</span>
+            <input type="date" name="fecha" value="${esc(m.fecha||'')}" style="flex:1;">
+            <button class="btn secondary small" type="submit">Guardar fecha</button>
+          </form>
+          <form data-action="enter-result" data-game="${game}" data-id="${m.id}" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+            <input type="number" name="score1" placeholder="Pts" style="width:60px;flex:0 0 auto;" required>
+            <span>–</span>
+            <input type="number" name="score2" placeholder="Pts" style="width:60px;flex:0 0 auto;" required>
+            <button class="btn small" type="submit">Guardar resultado</button>
+          </form>
+        </div>`).join('') + `</div>`;
     }
 
     if(played.length){
       html += `<h3 style="margin-top:14px;">Jugados</h3><div class="matchlist">` + played.map(m => `
         <div class="matchrow">
-          <span class="names">${m.score1>m.score2?'<span class=\"win\">':''}${esc(pairName(game,m.pair1))}${m.score1>m.score2?'</span>':''}
+          <span class="names">${m.fecha ? `<span style="font-size:11.5px;color:#54607a;">📅 ${esc(m.fecha)} · </span>` : ''}${m.score1>m.score2?'<span class=\"win\">':''}${esc(pairName(game,m.pair1))}${m.score1>m.score2?'</span>':''}
             vs
             ${m.score2>m.score1?'<span class=\"win\">':''}${esc(pairName(game,m.pair2))}${m.score2>m.score1?'</span>':''}</span>
           <span class="score">${m.score1} – ${m.score2}</span>
@@ -733,6 +689,7 @@ function renderGroups(game){
       <div class="field" style="flex:0 0 70px;"><label>Pts</label><input type="number" name="score1" required></div>
       <div class="field"><label>Pareja 2</label><select name="pair2" required>${pairOptions}</select></div>
       <div class="field" style="flex:0 0 70px;"><label>Pts</label><input type="number" name="score2" required></div>
+      <div class="field" style="flex:0 0 150px;"><label>Fecha (opcional)</label><input type="date" name="fecha"></div>
       <button class="btn" type="submit">Guardar</button>
     </form>`;
     html += `</div>`;
@@ -763,6 +720,7 @@ function renderKnockout(game){
       <div class="field" style="flex:0 0 70px;"><label>Pts</label><input type="number" name="score1" required></div>
       <div class="field"><label>Pareja 2</label><select name="pair2" required>${pairOptions}</select></div>
       <div class="field" style="flex:0 0 70px;"><label>Pts</label><input type="number" name="score2" required></div>
+      <div class="field" style="flex:0 0 150px;"><label>Fecha (opcional)</label><input type="date" name="fecha"></div>
       <button class="btn" type="submit">Guardar cruce</button>
     </form>
   </div>`;
@@ -778,7 +736,7 @@ function renderKnockout(game){
       html += `<div class="ko-round"><h4>${r}</h4><div class="matchlist">`;
       byRound[r].forEach(m => {
         html += `<div class="matchrow">
-          <span class="names">${m.score1>m.score2?'<span class=\"win\">':''}${esc(pairName(game,m.pair1))}${m.score1>m.score2?'</span>':''}
+          <span class="names">${m.fecha ? `<span style="font-size:11.5px;color:#54607a;">📅 ${esc(m.fecha)} · </span>` : ''}${m.score1>m.score2?'<span class=\"win\">':''}${esc(pairName(game,m.pair1))}${m.score1>m.score2?'</span>':''}
             vs
             ${m.score2>m.score1?'<span class=\"win\">':''}${esc(pairName(game,m.pair2))}${m.score2>m.score1?'</span>':''}</span>
           <span class="score">${m.score1} – ${m.score2}</span>
@@ -836,9 +794,6 @@ function renderAjustes(game){
 
 // ---- event delegation ----
 document.addEventListener('click', e => {
-  const tvBtn = e.target.closest('#tvModeBtn');
-  if(tvBtn){ enterTVMode(); return; }
-
   const tabBtn = e.target.closest('[data-tab]');
   if(tabBtn){ currentTab = tabBtn.dataset.tab; render(); return; }
 
@@ -870,7 +825,7 @@ document.addEventListener('click', e => {
         for(let j = i+1; j < pairsInGroup.length; j++){
           const key = [pairsInGroup[i].id, pairsInGroup[j].id].sort().join('|');
           if(existing.has(key)) continue;
-          g.groupMatches.push({ id: uid(), grupo, pair1: pairsInGroup[i].id, pair2: pairsInGroup[j].id, score1: null, score2: null, played: false });
+          g.groupMatches.push({ id: uid(), grupo, pair1: pairsInGroup[i].id, pair2: pairsInGroup[j].id, score1: null, score2: null, played: false, fecha: null });
         }
       }
       saveData(); render();
@@ -967,8 +922,9 @@ document.addEventListener('submit', e => {
       const grupo = form.dataset.grupo;
       const pair1 = fd.get('pair1'), pair2 = fd.get('pair2');
       const score1 = Number(fd.get('score1')), score2 = Number(fd.get('score2'));
+      const fecha = (fd.get('fecha')||'').trim();
       if(pair1 === pair2){ alert('Elige dos parejas distintas.'); return; }
-      state.games[game].groupMatches.push({ id: uid(), grupo, pair1, pair2, score1, score2, played: true });
+      state.games[game].groupMatches.push({ id: uid(), grupo, pair1, pair2, score1, score2, played: true, fecha });
     }
 
     if(action === 'enter-result'){
@@ -978,12 +934,20 @@ document.addEventListener('submit', e => {
       if(m){ m.score1 = score1; m.score2 = score2; m.played = true; }
     }
 
+    if(action === 'set-match-date'){
+      const id = form.dataset.id;
+      const fecha = (fd.get('fecha')||'').trim();
+      const m = state.games[game].groupMatches.find(m => m.id === id);
+      if(m){ m.fecha = fecha; }
+    }
+
     if(action === 'add-komatch'){
       const ronda = fd.get('ronda');
       const pair1 = fd.get('pair1'), pair2 = fd.get('pair2');
       const score1 = Number(fd.get('score1')), score2 = Number(fd.get('score2'));
+      const fecha = (fd.get('fecha')||'').trim();
       if(pair1 === pair2){ alert('Elige dos parejas distintas.'); return; }
-      state.games[game].koMatches.push({ id: uid(), ronda, pair1, pair2, score1, score2, played:true });
+      state.games[game].koMatches.push({ id: uid(), ronda, pair1, pair2, score1, score2, played:true, fecha });
     }
 
     saveData();
@@ -1013,113 +977,6 @@ async function init(){
   updateLockBadge();
 }
 init();
-
-// ---- TV MODE ----
-let tvMode = false;
-let tvGameIndex = 0;
-let tvPollInterval = null;
-const tvGameKeys = Object.keys(GAMES);
-
-function enterTVMode(){
-  tvMode = true;
-  document.getElementById('normalRoot').style.display = 'none';
-  document.getElementById('tvRoot').style.display = 'flex';
-  renderTV();
-  if(!tvPollInterval){
-    tvPollInterval = setInterval(async () => { await loadData(); if(tvMode) renderTV(); }, 6000);
-  }
-}
-
-function exitTVMode(){
-  tvMode = false;
-  document.getElementById('tvRoot').style.display = 'none';
-  document.getElementById('normalRoot').style.display = 'block';
-  if(tvPollInterval){ clearInterval(tvPollInterval); tvPollInterval = null; }
-  render();
-}
-
-function tvShiftGame(delta){
-  tvGameIndex = (tvGameIndex + delta + tvGameKeys.length) % tvGameKeys.length;
-  renderTV();
-}
-
-function renderTV(){
-  const key = tvGameKeys[tvGameIndex];
-  const meta = GAMES[key];
-  const g = state.games[key];
-  const champ = getChampion(key);
-  const logoSrc = document.querySelector('.falla-logo') ? document.querySelector('.falla-logo').src : '';
-
-  let html = `<button class="tv-exit" id="tvExitBtn">✕ Salir del modo TV</button>`;
-  html += `<div class="tv-header">
-    <button class="tv-arrow" id="tvPrev">‹</button>
-    <div class="tv-title">
-      ${logoSrc ? `<img src="${logoSrc}" class="tv-logo" alt="">` : ''}
-      <span class="bigdot" style="background:${meta.color}">${meta.icon}</span>
-      <h1>${meta.name}</h1>
-    </div>
-    <button class="tv-arrow" id="tvNext">›</button>
-  </div>`;
-
-  if(champ){
-    html += `<div class="tv-champion"><div class="label">Campeones</div><div class="name">🏆 ${esc(champ)}</div></div>`;
-  }
-
-  const formato = (g.settings && g.settings.formato) || 'grupos_eliminatoria';
-
-  if(g.pairs.length === 0){
-    html += `<div class="tv-empty">Todavía no hay parejas inscritas en este torneo.</div>`;
-  } else {
-    if(formato !== 'eliminatoria'){
-    html += `<div class="tv-section-title">Fase de grupos</div><div class="tv-groups">`;
-    g.groups.forEach(gr => {
-      const pairsInGroup = g.pairs.filter(p => p.grupo === gr);
-      if(pairsInGroup.length === 0) return;
-      const standings = computeStandings(key, gr);
-      html += `<div class="tv-group-card"><h3>Grupo ${gr}</h3>
-        <table class="tv-standings"><thead><tr><th>Pareja</th><th>PJ</th><th>G</th><th>Dif</th></tr></thead><tbody>`;
-      standings.forEach(s => {
-        html += `<tr><td>${esc(s.nombre)}</td><td>${s.pj}</td><td>${s.g}</td><td>${s.pf-s.pc>0?'+':''}${s.pf-s.pc}</td></tr>`;
-      });
-      html += `</tbody></table></div>`;
-    });
-    html += `</div>`;
-    }
-
-    const byRound = {};
-    g.koMatches.forEach(m => { (byRound[m.ronda] = byRound[m.ronda] || []).push(m); });
-    const roundsPresent = ROUND_ORDER.filter(r => byRound[r] && byRound[r].length);
-    if(roundsPresent.length){
-      html += `<div class="tv-section-title">Eliminatoria</div><div class="tv-ko">`;
-      roundsPresent.forEach(r => {
-        html += `<div class="tv-ko-round"><h4>${r}</h4>`;
-        byRound[r].forEach(m => {
-          html += `<div class="tv-matchrow">
-            <span>${m.score1>m.score2?'<span class=\"win\">':''}${esc(pairName(key,m.pair1))}${m.score1>m.score2?'</span>':''}
-              vs
-              ${m.score2>m.score1?'<span class=\"win\">':''}${esc(pairName(key,m.pair2))}${m.score2>m.score1?'</span>':''}</span>
-            <span class="score">${m.score1} – ${m.score2}</span>
-          </div>`;
-        });
-        html += `</div>`;
-      });
-      html += `</div>`;
-    }
-  }
-
-  const root = document.getElementById('tvRoot');
-  root.innerHTML = html;
-  document.getElementById('tvExitBtn').onclick = exitTVMode;
-  document.getElementById('tvPrev').onclick = () => tvShiftGame(-1);
-  document.getElementById('tvNext').onclick = () => tvShiftGame(1);
-}
-
-document.addEventListener('keydown', e => {
-  if(!tvMode) return;
-  if(e.key === 'ArrowLeft'){ tvShiftGame(-1); }
-  else if(e.key === 'ArrowRight'){ tvShiftGame(1); }
-  else if(e.key === 'Escape' || e.key === 'Backspace'){ exitTVMode(); }
-});
 </script>
 </body>
 </html>
